@@ -1,0 +1,154 @@
+#!/usr/bin/env python
+
+import http.client
+from urllib.parse import urlparse
+import ipaddress
+import subprocess
+import json
+import argparse
+import uuid
+import struct
+import re
+
+dhcp_mi = "par3::dhcp"
+
+def clear_leases_by_duid(duid: str, control_agent_url="http://localhost:8000/"):
+    parsed_url = urlparse(control_agent_url)
+    conn = http.client.HTTPConnection(parsed_url.hostname, parsed_url.port)
+    headers = {'Content-Type': 'application/json'}
+
+    # Step 1: Get leases by DUID
+    get_payload = {
+        "service": ["dhcp6"],
+        "command": "lease6-get-by-duid",
+        "arguments": {
+            "duid": duid
+        }
+    }
+
+    conn.request("POST", "/", body=json.dumps(get_payload), headers=headers)
+    response = conn.getresponse()
+    if response.status != 200:
+        raise Exception(f"Error contacting Kea: {response.status} - {response.read().decode()}")
+
+    data = json.loads(response.read().decode())
+
+
+    print(data)
+    if len(data) == 0 or "arguments" not in data[0] and "leases" not in data[0]["arguments"]:
+        print(f"No leases found for DUID: {duid}")
+        conn.close()
+        return
+
+    leases = data[0]["arguments"]["leases"]
+
+    # Step 2: Delete each lease by IP
+    for lease in leases:
+        ip = lease["ip-address"]
+        if not ip:
+            continue
+
+        del_payload = {
+            "service": ["dhcp6"],
+            "command": "lease6-del",
+            "arguments": {
+                "ip-address": ip
+            }
+        }
+
+        conn.request("POST", "/", body=json.dumps(del_payload), headers=headers)
+        del_response = conn.getresponse()
+        del_data = json.loads(del_response.read().decode())
+
+        if len(del_data) == 0:
+            return
+
+        if del_data[0]["result"] == 0:
+            print(f"Deleted lease for IP: {ip}")
+        else:
+            print(f"Failed to delete lease for IP: {ip} – {del_data.get('text')}")
+
+    conn.close()
+
+
+def generate_duid_uuid():
+    duid_type = 4
+    generated_uuid = uuid.uuid4()
+    duid_bytes = struct.pack("!H", duid_type) + generated_uuid.bytes
+    duid_colon_hex = ':'.join(f'{b:02x}' for b in duid_bytes)
+    return duid_colon_hex, generated_uuid
+
+def is_valid_hostname(hostname):
+    if len(hostname) > 253:
+        return False
+
+    if hostname[-1] == ".":
+        hostname = hostname[:-1]
+
+    label_regex = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)$")
+    return all(label_regex.match(label) for label in hostname.split("."))
+
+parser = argparse.ArgumentParser(description="Allocate a new IP to a new host")
+parser.add_argument("--hostname", required=True, help="Hostname of your new host")
+parser.add_argument("--duid", required=False, help="Manual duid, generate automatically if None")
+args = parser.parse_args()
+
+if not is_valid_hostname(args.hostname):
+    print(f"invalid hostname {args.hostname}")
+    exit(1)
+
+dhcp_config = json.loads(subprocess.run(f"sheikahctl get {dhcp_mi}", shell=True, check=True, capture_output=True).stdout)
+subnet = ipaddress.ip_network(dhcp_config["subnet"])
+
+pool = subnet
+if "::pools" in dhcp_config:
+    for name, p in dhcp_config["::pools"].items():
+        pool = p
+        break
+
+pool = ipaddress.ip_network(pool)
+
+ips = []
+
+for hostname, data in dhcp_config["::leases"].items():
+    hostname = hostname.lstrip("::")
+    duid = data["duid"]
+    ip = ipaddress.ip_address(data["ip"])
+
+    if hostname == args.hostname:
+        print(f"{hostname} is already defined")
+        print(f"{ip}/{duid}")
+        exit(1)
+
+    if ip in pool:
+        ips.append(ip)
+
+
+if not len(ips):
+    next_ip = pool.hosts[0]
+else:
+    ips.sort()
+    next_ip = ips[-1] + 1
+
+if not args.duid:
+    print("generate duid")
+    args.duid, _ = generate_duid_uuid()
+
+try:
+    print(f"pinging {next_ip} to know if a machine already use that IP...")
+    ping_response = subprocess.run(f"ping -c1 -w1 -W1 {next_ip}", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    dig_response = subprocess.run(f"dig +short -x {next_ip}", shell=True, check=True, capture_output=True, stderr=subprocess.DEVNULL).stdout
+    print(f"{next_ip}/{dig_response} seems already allocated")
+    exit(1)
+except Exception as e:
+    pass
+
+print(f"allocate {next_ip}/{args.duid} to {args.hostname}")
+
+cmd = f"sheikahctl set {dhcp_mi}::leases::{args.hostname}:ip '{next_ip}'"
+subprocess.run(f"sheikahctl set {dhcp_mi}::leases::{args.hostname}:ip '{next_ip}'", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+subprocess.run(f"sheikahctl set {dhcp_mi}::leases::{args.hostname}:duid '{args.duid}'", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+clear_leases_by_duid(args.duid)
+
+subprocess.run(f"/etc/sheikah/kea/configure", shell=True, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -1,0 +1,52 @@
+#!/bin/bash
+
+DHCP_MI="${DHCP_MI:-par3::dhcp}"
+SHEIKAH_CONFIG="${SHEIKAH_CONFIG:-/etc/sheikah/kea}"
+KEA_USER="${KEA_USER:-kea}"
+
+TMP=$(mktemp)
+
+echo "installing kea"
+dnf install -y kea
+
+echo "writing sheikah configs"
+mkdir -vp "$(dirname "$SHEIKAH_CONFIG")"
+chown root:root "$(dirname "$SHEIKAH_CONFIG")"
+chmod 755 "$(dirname "$SHEIKAH_CONFIG")"
+
+mkdir -vp "$SHEIKAH_CONFIG"
+chown "$KEA_USER:" "$SHEIKAH_CONFIG"
+
+mv -v kea-dhcp6.conf.tpl "$SHEIKAH_CONFIG/kea-dhcp6.conf.tpl"
+chown "$KEA_USER:" "$SHEIKAH_CONFIG/kea-dhcp6.conf.tpl"
+chmod 644 "$SHEIKAH_CONFIG/kea-dhcp6.conf.tpl"
+
+mv -v kea-ctrl-agent.conf.tpl "$SHEIKAH_CONFIG/kea-ctrl-agent.conf.tpl"
+chown "$KEA_USER:" "$SHEIKAH_CONFIG/kea-ctrl-agent.conf.tpl"
+chmod 644 "$SHEIKAH_CONFIG/kea-ctrl-agent.conf.tpl"
+
+mv -v allocate "$SHEIKAH_CONFIG/allocate"
+sed -i "/^dhcp_mi =\"/c\dhcp_mi = \${DHCP_MI:-${DHCP_MI}"} "$SHEIKAH_CONFIG/allocate"
+chown "root:" "$SHEIKAH_CONFIG/allocate"
+chmod 750 "$SHEIKAH_CONFIG/allocate"
+
+mv -v configure "$SHEIKAH_CONFIG/configure"
+sed -i "/^DHCP_MI=\"/c\DHCP_MI=\${DHCP_MI:-${DHCP_MI}"} "$SHEIKAH_CONFIG/configure"
+chown "root:" "$SHEIKAH_CONFIG/configure"
+chmod 750 "$SHEIKAH_CONFIG/configure"
+
+if [[ -x "$(command -v getenforce)" ]] && [[ `getenforce` = "Enforcing" ]]; then
+        echo "restoring SELinux context"
+        restorecon -Rv "$SHEIKAH_CONFIG"
+fi
+
+bash "$SHEIKAH_CONFIG/configure"
+
+systemctl daemon-reload
+if [[ `systemctl is-active kea-dhcp6` = "active" ]]; then
+        systemctl restart kea-dhcp6
+else
+        systemctl enable --now kea-dhcp6
+fi
+
+
