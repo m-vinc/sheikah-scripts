@@ -1,0 +1,38 @@
+#!/bin/bash
+
+set -e
+
+GOMPLATE_VERSION="${GOMPLATE_VERSION:-v4.3.3}"
+GOMPLATE_PATH="${GOMPLATE_PATH:-/usr/local/bin/gomplate}"
+TMP=$(mktemp)
+
+if [[ ! -x "$(command -v wget)" ]]; then
+        echo "wget is required"
+        exit
+fi
+
+if [[ -x "$(command -v gomplate)" ]]; then
+        CURRENT_VERSION=$(gomplate --version | cut -d' ' -f 3)
+        if [[ "v$CURRENT_VERSION" != "$GOMPLATE_VERSION" ]]; then
+                echo "different version requested $CURRENT_VERSION -> $GOMPLATE_VERSION, reinstalling"
+                VERSION_CHANGE="true"
+        fi
+fi
+
+if [[ ! -f "$GOMPLATE_PATH" ]] || [[ "$VERSION_CHANGE" = "true" ]]; then
+        wget -O $TMP https://github.com/hairyhenderson/gomplate/releases/download/$GOMPLATE_VERSION/gomplate_linux-amd64
+
+        echo "installing into $GOMPLATE_PATH"
+        mv -v $TMP $GOMPLATE_PATH
+fi
+
+
+echo "fixing permissions"
+chmod -v 755 "$GOMPLATE_PATH"
+chown root: "$GOMPLATE_PATH"
+
+if [[ -x "$(command -v getenforce)" ]] && [[ `getenforce` -eq "Enforcing" ]]; then
+        echo "restoring SELinux context"
+        restorecon -v "$GOMPLATE_PATH"
+fi
+

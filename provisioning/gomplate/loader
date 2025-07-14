@@ -1,0 +1,13 @@
+#!/bin/bash
+
+TMP=$(mktemp -d)
+SHEIKAH_MI="${SHEIKAH_MI:-provisioning::pack:gomplate}"
+
+echo "expanding to $TMP"
+sheikahctl get -r "$SHEIKAH_MI" | base64 -d | tar zx -C $TMP
+
+cd $TMP
+
+bash install
+
+rm -rf $TMP
