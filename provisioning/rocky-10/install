@@ -1,0 +1,14 @@
+#!/bin/bash
+
+HOSTNAME="${HOSTNAME:-$(hostname -f)}"
+HOSTGROUP_MI="${HOSTGROUP_MI:-par3::hostgroups::rocky-10}"
+HOST_MI="${HOST_MI:-par3::hosts::$HOSTNAME}"
+SSH_KEYRING_MI="${KEYRING_MI:-par3::keyring::ssh}"
+
+source ./ssh_keys
+source ./packages
+source ./ipa
+
+packages "$HOSTGROUP_MI" "$HOST_MI"
+enroll "$HOSTGROUP_MI" "$HOST_MI"
+ssh_keys

@@ -1,0 +1,39 @@
+#!/bin/bash
+
+PACKAGES_REFRESH="${PACKAGES_REFRESH:-true}"
+
+function update_sheikah(){
+  SHEIKAHCTL_RPM_URL="${SHEIKAHCTL_RPM_URL:-https://berta.par3.as207745.mvinc.fr/sheikahctl.rpm}"
+  echo "install sheikahctl from $SHEIKAHCTL_RPM_URL"
+  dnf --best -y install "$SHEIKAHCTL_RPM_URL"
+  dnf --best -y reinstall "$SHEIKAHCTL_RPM_URL"
+}
+
+function packages(){
+  HOSTGROUP_MI="$1"
+  HOST_MI="$2"
+
+  METAPACKAGES=$(sheikahctl get -r "$HOSTGROUP_MI:metapackages")
+  if [[ $? -eq 0 ]]; then
+    echo "installing global meta packages: $METAPACKAGES"
+    dnf install $([[ "$PACKAGES_REFRESH" = "true" ]] && echo "--refresh") -y $METAPACKAGES
+  fi
+
+  PACKAGES=$(sheikahctl get -r "$HOSTGROUP_MI:packages" 2>/dev/null)
+  if [[ $? -eq 0 ]]; then
+          echo "installing global packages: $PACKAGES"
+          dnf install $([[ "$PACKAGES_REFRESH" = "true" ]] && echo "--refresh") -y $PACKAGES
+  fi
+
+  METAPACKAGES=$(sheikahctl get -r "$HOST_MI:metapackages" 2>/dev/null)
+  if [[ $? -eq 0 ]]; then
+    echo "installing host meta packages: $METAPACKAGES"
+    dnf install $([[ "$PACKAGES_REFRESH" = "true" ]] && echo "--refresh") -y $METAPACKAGES
+  fi
+
+  PACKAGES=$(sheikahctl get -r "$HOST_MI:packages" 2>/dev/null)
+  if [[ $? -eq 0 ]]; then
+          echo "installing host packages: $PACKAGES"
+          dnf install $([[ "$PACKAGES_REFRESH" = "true" ]] && echo "--refresh") -y $PACKAGES
+  fi
+}

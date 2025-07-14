@@ -1,0 +1,33 @@
+#!/bin/bash
+
+function enrolled(){
+  ENROLLED=$(grep -q "complete = True" "/var/lib/ipa-client/sysrestore/sysrestore.state" 2>/dev/null)
+  if [[ $? -eq 0 ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+function enroll(){
+  HOSTGROUP_MI="$1"
+  HOST_MI="$2"
+
+  if [[ ! -x "$(command -v ipa-client-install)" ]]; then
+    echo "ipa-client-install is not available"
+    exit 1
+  fi
+
+  if enrolled ; then
+    echo "already enrolled"
+    exit 0
+  fi
+
+  echo "start enrollement process"
+  NTP_POOL=$(sheikahctl get -r "$HOSTGROUP_MI:ntp_pool")
+  IPA_OTP=$(sheikahctl get -r "$HOST_MI:ipa_otp")
+
+
+  ipa-client-install --ntp-pool "$NTP_POOL" --unattended --password "$IPA_OTP"
+}
+

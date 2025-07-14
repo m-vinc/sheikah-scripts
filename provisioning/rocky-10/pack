@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -e
+
+SHEIKAH_PACK_MI="provisioning::pack:rocky-10"
+SHEIKAH_LOADER_MI="provisioning::loader:rocky-10"
+FILES="install ssh_keys packages ipa"
+LOADER="loader"
+
+echo "packing:"
+ls -lah $FILES
+
+echo "uploading pack to $SHEIKAH_PACK_MI"
+PACK=$(tar cz -O $FILES | base64 -w0)
+
+sheikahctl set "$SHEIKAH_PACK_MI" "$PACK"
+echo -e "\n"
+echo "uploaded to $SHEIKAH_PACK_MI"
+
+
+echo "uploading loader to $SHEIKAH_LOADER_MI"
+LOADER=$(cat loader | base64 -w0)
+sheikahctl set "$SHEIKAH_LOADER_MI" "$LOADER"
+echo -e "\n"
+echo "uploaded to $SHEIKAH_LOADER_MI"

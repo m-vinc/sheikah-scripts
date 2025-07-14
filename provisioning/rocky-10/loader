@@ -1,0 +1,19 @@
+#!/bin/bash
+
+
+
+TMP=$(mktemp -d)
+SHEIKAH_MI="${SHEIKAH_MI:-provisioning::pack:rocky-10}"
+
+echo "expanding to $TMP"
+PACK_BIN=$(set -o pipefail; sheikahctl get -x -r "$SHEIKAH_MI" | tar zx -C $TMP)
+if [[ $? -ne 0 ]]; then
+  echo "unable to get/unpack $SHEIKAH_PACK_MI"
+  exit 1
+fi
+
+cd $TMP
+
+bash install
+
+rm -rf $TMP

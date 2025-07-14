@@ -1,0 +1,38 @@
+#!/bin/bash
+
+
+function ssh_keys() {
+  SSH_KEYS="$(sheikahctl get "$SSH_KEYRING_MI" | jq -r '.[]')"
+  ADD_TO="root vm"
+
+  for user in $ADD_TO; do
+    id -u "$user" > /dev/null 2>&1
+
+    if [[ $? -ne 0 ]]; then
+      echo "$user doesn't exist, skip"
+      continue
+    fi
+
+    USER_HOME=$(eval echo ~$user)
+    SSH_HOME="$USER_HOME/.ssh"
+    AUTHORIZED_KEYS_FILE="$SSH_HOME/authorized_keys"
+
+    mkdir -pv "$SSH_HOME"
+    chmod 700 "$SSH_HOME"
+    chown $user: "$SSH_HOME"
+
+    touch "$AUTHORIZED_KEYS_FILE"
+    chmod 600 "$AUTHORIZED_KEYS_FILE"
+    chown $user: "$SSH_HOME"
+
+    while IFS=$'\n' read -r key; do
+            grep -m 1 "$key" "$AUTHORIZED_KEYS_FILE" >/dev/null 2>&1
+            RC=$?
+            if [[ $RC -eq 1 ]]; then
+                    echo "push $key to $AUTHORIZED_KEYS_FILE"
+                    echo "$key" >> "$AUTHORIZED_KEYS_FILE"
+            fi
+    done <<< "$SSH_KEYS"
+  done
+}
+
