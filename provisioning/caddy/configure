@@ -11,7 +11,12 @@ done
 CADDY_MI="${CADDY_MI:-par3::rp::berta}"
 CADDYFILE_PATH="/etc/caddy/Caddyfile"
 TMP=$(mktemp --suffix '.caddyfile')
-DATA=$(sheikahctl get "$CADDY_MI")
+
+DATA=$(sheikahctl get "$CADDY_MI" 2>/dev/null)
+if [[ $? -ne 0 ]]; then
+        echo "cannot get MI $CADDY_MI from sheikah"
+        exit 1
+fi
 
 echo "$DATA" | gomplate -d caddy=stdin://in.json?type=application/json -f /etc/sheikah/caddy/Caddyfile.tpl -o $TMP
 if [[ $? -ne 0 ]]; then

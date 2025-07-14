@@ -1,0 +1,88 @@
+#!/bin/bash
+
+CADDY_MI="${CADDY_MI:-par3::rp::berta}"
+CADDY_USER="${CADDY_USER:-caddy}"
+CADDY_PATH="${CADDY_PATH:-/usr/local/bin/caddy}"
+CADDY_CONFIG_PATH="${CADDY_CONFIG_PATH:-/etc/caddy}"
+CADDY_SERVICE_PATH="${CADDY_SERVICE_PATH:-/etc/systemd/system/caddy.service}"
+CADDY_VERSION="${CADDY_VERSION:-2.10.0}"
+SHEIKAH_CONFIG="${SHEIKAH_CONFIG:-/etc/sheikah/caddy}"
+
+TMP=$(mktemp)
+
+groupadd --system "$CADDY_USER"
+useradd \
+        --system \
+        --gid "$CADDY_USER" \
+        --create-home \
+        --home-dir "/var/lib/$CADDY_USER" \
+        --shell /usr/sbin/nologin \
+        --comment "Caddy web server" \
+        "$CADDY_USER"
+
+echo "writing sheikah configs"
+mkdir -vp "$(dirname "$SHEIKAH_CONFIG")"
+chown root:root "$(dirname "$SHEIKAH_CONFIG")"
+chmod 755 "$(dirname "$SHEIKAH_CONFIG")"
+
+mkdir -vp "$SHEIKAH_CONFIG"
+chown "$CADDY_USER:" "$SHEIKAH_CONFIG"
+
+mv -v Caddyfile.tpl "$SHEIKAH_CONFIG/Caddyfile.tpl"
+chown "$CADDY_USER:" "$SHEIKAH_CONFIG/Caddyfile.tpl"
+chmod 644 "$SHEIKAH_CONFIG/Caddyfile.tpl"
+
+mv -v configure "$SHEIKAH_CONFIG/configure"
+sed -i "/^CADDY_MI=\"/c\CADDY_MI=\${CADDY_MI:-${CADDY_MI}"} "$SHEIKAH_CONFIG/configure"
+chown "root:" "$SHEIKAH_CONFIG/configure"
+chmod 750 "$SHEIKAH_CONFIG/configure"
+
+echo "installing"
+if [[ -x $(command -v "$CADDY_PATH") ]]; then
+        CURRENT_VERSION=$(caddy --version | cut -d' ' -f 1)
+        if [[ "$CURRENT_VERSION" != "v$CADDY_VERSION" ]]; then
+                echo "different version requested $CURRENT_VERSION -> v$CADDY_VERSION, reinstalling"
+                VERSION_CHANGE="true"
+        fi
+fi
+
+if [[ ! -f "$CADDY_PATH" ]] || [[ "$VERSION_CHANGE" = "true" ]]; then
+        wget -O "$TMP" "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz"
+        tar xvf "$TMP" -C "$(dirname $CADDY_PATH)" "$(basename $CADDY_PATH)"
+        rm -f "$TMP"
+        INSTALLED="true"
+fi
+
+chown -v "$CADDY_USER:" "$CADDY_PATH"
+chmod -v 755 "$CADDY_PATH"
+
+if [[ -x "$(command -v getenforce)" ]] && [[ `getenforce` = "Enforcing" ]]; then
+        echo "restoring SELinux context"
+        restorecon -v "$CADDY_PATH"
+fi
+
+if [[ ! -f "$CADDY_SERVICE_PATH" ]]; then
+        cp -v caddy.service "$CADDY_SERVICE_PATH"
+fi
+
+
+mkdir -pv "$CADDY_CONFIG_PATH"
+if [[ ! -f "$CADDY_CONFIG_PATH/Caddyfile" ]]; then
+        echo "" > "$CADDY_CONFIG_PATH/Caddyfile"
+fi
+
+chown -Rv caddy:caddy "$CADDY_CONFIG_PATH"
+
+systemctl daemon-reload
+if [[ `systemctl is-active caddy` = "active" ]]; then
+        if [[ "$INSTALLED" = "true" ]]; then
+                systemctl restart caddy
+        else
+                systemctl reload caddy
+        fi
+else
+        systemctl enable --now caddy
+fi
+
+bash "$SHEIKAH_CONFIG/configure"
+
