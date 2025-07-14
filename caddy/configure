@@ -1,0 +1,92 @@
+#!/bin/bash
+
+REQUIREMENTS="sheikahctl jq gomplate"
+for req in $REQUIREMENTS; do
+        if [[ ! -x "$(command -v $req)" ]]; then
+                echo "you must install $REQUIREMENTS to run that script, $req is missing"
+                exit 1
+        fi
+done
+
+CADDY_MI="${CADDY_MI:-par3::rp::berta}"
+CADDYFILE_PATH="/etc/caddy/Caddyfile"
+TMP=$(mktemp --suffix '.caddyfile')
+DATA=$(sheikahctl get "$CADDY_MI")
+
+echo "$DATA" | gomplate -d caddy=stdin://in.json?type=application/json -f /etc/sheikah/caddy/Caddyfile.tpl -o $TMP
+if [[ $? -ne 0 ]]; then
+        echo "cannot generate new config removing tmp"
+        rm -vf $TMP
+        exit 1
+fi
+
+caddy fmt -c "$TMP" --overwrite
+if [[ $? -ne 0 ]]; then
+        echo "unable to re-format the new configuration, discarding ..."
+        rm -vf $TMP
+        exit 1
+fi
+
+caddy validate -c "$TMP"
+if [[ $? -ne 0 ]]; then
+        echo "caddy is disliking the new config, discarding ..."
+        rm -vf "$TMP"
+        exit 1
+fi
+
+echo "replacing config"
+mv -v "$CADDYFILE_PATH" "$CADDYFILE_PATH.bak"
+mv -v "$TMP" "$CADDYFILE_PATH"
+
+ROOT=$(echo "$DATA" | jq -r '.root')
+if [[ ! -z "$ROOT" ]]; then
+        echo "configuring root"
+        mkdir -vp "$ROOT"
+        chown -v caddy: "$ROOT"
+        chmod -v  755 "$ROOT"
+        if [[ -x "$(command -v getenforce)" ]] && [[ `getenforce` = "Enforcing" ]]; then
+                restorecon -Rv "$ROOT"
+        fi
+fi
+
+echo "fixing permissions"
+chown -v caddy: "$CADDYFILE_PATH"
+
+if [[ -x "$(command -v getenforce)" ]] && [[ `getenforce` = "Enforcing" ]]; then
+        echo "restoring SELinux context"
+        restorecon -v $CADDYFILE_PATH
+fi
+
+echo "reloading configuration"
+systemctl reload caddy
+
+if [[ $? -ne 0 ]]; then
+        echo "unable to reload caddy configuration, review the error manually"
+        journalctl -u caddy -e | tail -n 100
+        exit 1
+fi
+
+echo "caddy reconfigured !"
+
+if [[ -x "$(command -v firewall-cmd)" ]] && [[ `systemctl is-active firewalld` = "active" ]]; then
+        echo "fixing firewall rules ..."
+
+        firewall-cmd --zone=public --add-service https --permanent
+        if [[ $? -ne 0 ]]; then
+                echo "unable to allow https to public zone"
+                exit 1
+        fi
+
+        firewall-cmd --zone=public --add-service http --permanent
+        if [[ $? -ne 0 ]]; then
+                echo "unable to allow http to public zone"
+                exit 1
+        fi
+
+        firewall-cmd --reload
+        if [[ $? -ne 0 ]]; then
+                echo "unable to reload firewalld rule"
+                exit 1
+        fi
+fi
+
