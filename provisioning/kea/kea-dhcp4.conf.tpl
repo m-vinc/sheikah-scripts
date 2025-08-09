@@ -34,6 +34,7 @@
         {{ if $k | strings.HasPrefix "::" }}
         {
                 "id": {{ index $v "id" }},
+		"interface": {{ (index (ds "dhcp") "interface") | strings.Quote }},
                 "option-data": [
                 {{ if index $v "router" }}
                 {

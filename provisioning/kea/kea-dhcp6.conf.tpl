@@ -32,6 +32,7 @@
         {{ if $k | strings.HasPrefix "::" }}
         {
             "id": {{ (index $v "id") }},
+            "interface": {{ (index (ds "dhcp") "interface") | strings.Quote }},
             "subnet": {{ strings.Quote (index $v "subnet") }},
             "option-data": [
                 {{ if (index $v "dns_servers") }}
