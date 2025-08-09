@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -o pipefail
+
+TMP=$(mktemp)
+KEA_CTRL_AGENT_TARGET="/etc/kea/kea-ctrl-agent.conf"
+ENABLE_CTRL_AGENT="${ENABLE_CTRL_AGENT:=true}"
+DHCP_MI=${DHCP_MI:-par3::dhcp::v4}
+
+DATA=$(sheikahctl get "$DHCP_MI")
+if [[ $? -ne 0 ]]; then
+        echo "unable to fetch data from sheikah"
+        rm -f $TMP
+        exit 1
+fi
+
+
+RES=$(echo "$DATA" | gomplate -d dhcp=stdin://in.json?type=application/json -f /etc/sheikah/kea/kea-ctrl-agent.conf.tpl -o $TMP)
+RC=$?
+if [[ $RC -ne 0 ]]; then
+        echo "[$RC] unable to generate kea ctrl agent config from sheikah data: $RES"
+        rm -f "$TMP"
+        exit 1
+fi
+
+RES=$(kea-ctrl-agent -t $TMP)
+if [[ $? -ne 0 ]]; then
+        echo "unable to validate generated from kea: $RES"
+        rm -f "$TMP"
+        exit 1
+fi
+
+mv $TMP $KEA_CTRL_AGENT_TARGET
+chown kea: $KEA_CTRL_AGENT_TARGET
+restorecon -v $KEA_CTRL_AGENT_TARGET
+

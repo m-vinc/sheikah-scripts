@@ -1,0 +1,38 @@
+#!/bin/bash
+
+set -o pipefail
+
+TMP=$(mktemp)
+KEA_DHCP6_TARGET="/etc/kea/kea-dhcp6.conf"
+KEA_CTRL_AGENT_TARGET="/etc/kea/kea-ctrl-agent.conf"
+ENABLE_CTRL_AGENT="${ENABLE_CTRL_AGENT:=true}"
+DHCP_MI=${DHCP_MI:-par3::dhcp::v6}
+
+DATA=$(sheikahctl get "$DHCP_MI")
+if [[ $? -ne 0 ]]; then
+        echo "unable to fetch data from sheikah"
+        rm -f $TMP
+        exit 1
+fi
+
+echo "backuping existing configuration: $KEA_DHCP6_TARGET.bak"
+cp "$KEA_DHCP6_TARGET" "$TARGET.bak"
+chown kea: "$KEA_DHCP6_TARGET.bak"
+
+RES=$(echo "$DATA" | gomplate -d dhcp=stdin://in.json?type=application/json -f /etc/sheikah/kea/kea-dhcp6.conf.tpl -o $TMP)
+if [[ $? -ne 0 ]]; then
+        echo "unable to generate dhcp config from sheikah data: $RES"
+        rm -f "$TMP"
+        exit 1
+fi
+
+RES=$(kea-dhcp6 -t $TMP)
+if [[ $? -ne 0 ]]; then
+        echo "unable to validate generated from kea: $RES"
+        rm -f "$TMP"
+        exit 1
+fi
+
+mv $TMP $KEA_DHCP6_TARGET
+chown kea: $KEA_DHCP6_TARGET
+restorecon -v $KEA_DHCP6_TARGET

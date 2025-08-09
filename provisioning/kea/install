@@ -43,10 +43,10 @@ fi
 bash "$SHEIKAH_CONFIG/configure"
 
 systemctl daemon-reload
-if [[ `systemctl is-active kea-dhcp6` = "active" ]]; then
-        systemctl restart kea-dhcp6
-else
-        systemctl enable --now kea-dhcp6
-fi
-
-
+for svc in dhcp6 dhcp4 ctrl-agent; do
+	if [[ `systemctl is-active kea-$svc` = "active" ]]; then
+	        systemctl restart kea-$svc
+	else
+	        systemctl enable --now kea-$svc
+	fi
+done

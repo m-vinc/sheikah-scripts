@@ -4,7 +4,7 @@ set -e
 
 SHEIKAH_PACK_MI="provisioning::pack:kea"
 SHEIKAH_LOADER_MI="provisioning::loader:kea"
-FILES="configure install allocate kea-ctrl-agent.conf.tpl kea-dhcp6.conf.tpl"
+FILES="configure configure_ctrl_agent configure4 configure6 install allocate kea-ctrl-agent.conf.tpl kea-dhcp4.conf.tpl kea-dhcp6.conf.tpl"
 LOADER="loader"
 
 echo "packing:"

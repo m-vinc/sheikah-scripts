@@ -1,85 +1,8 @@
 #!/bin/bash
 
-set -o pipefail
+set -e
 
-TMP=$(mktemp)
-KEA_DHCP6_TARGET="/etc/kea/kea-dhcp6.conf"
-KEA_CTRL_AGENT_TARGET="/etc/kea/kea-ctrl-agent.conf"
-ENABLE_CTRL_AGENT="${ENABLE_CTRL_AGENT:=true}"
-DHCP_MI="par3::dhcp"
-
-DATA=$(sheikahctl get "$DHCP_MI")
-if [[ $? -ne 0 ]]; then
-        echo "unable to fetch data from sheikah"
-        rm -f $TMP
-        exit 1
-fi
-
-echo "backuping existing configuration: $KEA_DHCP6_TARGET.bak"
-cp "$KEA_DHCP6_TARGET" "$TARGET.bak"
-chown kea: "$KEA_DHCP6_TARGET.bak"
-
-
-RES=$(echo "$DATA" | gomplate -d dhcp=stdin://in.json?type=application/json -f /etc/sheikah/kea/kea-dhcp6.conf.tpl -o $TMP)
-if [[ $? -ne 0 ]]; then
-        echo "unable to generate dhcp config from sheikah data: $RES"
-        rm -f "$TMP"
-        exit 1
-fi
-
-RES=$(kea-dhcp6 -t $TMP)
-if [[ $? -ne 0 ]]; then
-        echo "unable to validate generated from kea: $RES"
-        rm -f "$TMP"
-        exit 1
-fi
-
-mv $TMP $KEA_DHCP6_TARGET
-chown kea: $KEA_DHCP6_TARGET
-restorecon -v $KEA_DHCP6_TARGET
-
-if [[ "$ENABLE_CTRL_AGENT" = "true" ]]; then
-        RES=$(echo "$DATA" | gomplate -d dhcp=stdin://in.json?type=application/json -f /etc/sheikah/kea/kea-ctrl-agent.conf.tpl -o $TMP)
-        RC=$?
-        if [[ $RC -ne 0 ]]; then
-                echo "[$RC] unable to generate kea ctrl agent config from sheikah data: $RES"
-                rm -f "$TMP"
-                exit 1
-        fi
-
-        RES=$(kea-ctrl-agent -t $TMP)
-        if [[ $? -ne 0 ]]; then
-                echo "unable to validate generated from kea: $RES"
-                rm -f "$TMP"
-                exit 1
-        fi
-
-        mv $TMP $KEA_CTRL_AGENT_TARGET
-        chown kea: $KEA_CTRL_AGENT_TARGET
-        restorecon -v $KEA_CTRL_AGENT_TARGET
-fi
-
-START_SERVICES="kea-dhcp6"
-if [[ "$ENABLE_CTRL_AGENT" = "true" ]]; then
-        START_SERVICES="$START_SERVICES kea-ctrl-agent"
-else
-        STOP_SERVICES="$STOP_SERVICES kea-ctrl-agent"
-fi
-
-for SERVICE in $SERVICES; do
-        ACTIVE=$(systemctl is-active "$SERVICE")
-        if [[ "$ACTIVE" = "active" ]]; then
-                echo "reloading $SERVICE ..."
-                systemctl reload "$SERVICE"
-        else
-                echo "restarting $SERVICE"
-                systemctl enable --now "$SERVICE"
-                systemctl restart "$SERVICE"
-        fi
-done
-
-for SERVICE in $STOP_SERVICES; do
-        echo "stop & disable $SERVICE ..."
-        systemctl disable --now "$SERVICE"
-done
+bash configure4
+bash configure6
+bash configure_ctrl_agent
 

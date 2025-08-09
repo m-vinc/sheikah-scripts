@@ -27,42 +27,42 @@
         "rebind-timer": 2000,
         "preferred-lifetime": 3000,
         "valid-lifetime": 4000,
-
-        "option-data": [
-            {{ if (index (ds "dhcp") "dns_servers") }}
-            {
-                "name": "dns-servers",
-                "data": "{{ index (ds "dhcp") "dns_servers" }}"
-            }
-            {{ end }}
-        ],
-
         "subnet6": [
-            {
-                "id": {{ (index (ds "dhcp") "id") }},
-                "interface": {{ index (ds "dhcp") "interface" | strings.Quote }},
-                "subnet": {{ strings.Quote (index (ds "dhcp") "subnet") }},
-                {{ if  index (ds "dhcp") "::pools" }}
-                "pools": [
-                    {{ $c := 0 }}
-                    {{ $l := ( len (index (ds "dhcp") "::pools") ) }}
-                    {{ range $k, $v := (index (ds "dhcp") "::pools") }} { {{ "pool" | strings.Quote }}: {{ strings.Quote $v }} }{{ if lt $c (add $l -1) }},{{ end }} {{ $c = (add $c 1) }}{{ end }}
-                ],
+        {{ range $k, $v := (ds "dhcp") }}
+        {{ if $k | strings.HasPrefix "::" }}
+        {
+            "id": {{ (index $v "id") }},
+            "subnet": {{ strings.Quote (index $v "subnet") }},
+            "option-data": [
+                {{ if (index $v "dns_servers") }}
+                {
+                    "name": "dns-servers",
+                    "data": "{{ index $v "dns_servers" }}"
+                }
                 {{ end }}
-                "reservations": [
+            ],
+            {{ if  index $v "::pools" }}
+            "pools": [
                 {{ $c := 0 }}
-                {{ $l := ( len (index (ds "dhcp") "::leases") ) }}
-                {{ range $hostname, $data := (index (ds "dhcp") "::leases") }}{
-                        {{ "hostname" | strings.Quote }}: {{ $hostname | strings.TrimLeft "::" | strings.Quote }},
-                        {{ "duid" | strings.Quote }}: {{ index $data "duid" | strings.Quote }},
-                        {{ "ip-addresses" | strings.Quote }}: [{{ index $data "ip" | strings.Quote }}]
-                }{{ if lt $c (add $l -1) }},{{ end }}
-                {{ $c = (add $c 1) }}
-                {{ end }}
-                ]
-            }
+                {{ $l := ( len (index $k "::pools") ) }}
+                {{ range $k, $v := (index $v  "::pools") }} { {{ "pool" | strings.Quote }}: {{ strings.Quote $v }} }{{ if lt $c (add $l -1) }},{{ end }} {{ $c = (add $c 1) }}{{ end }}
+            ],
+            {{ end }}
+            "reservations": [
+            {{ $c := 0 }}
+            {{ $l := ( len (index $v "::leases") ) }}
+            {{ range $hostname, $data := (index $v "::leases") }}{
+                    {{ "hostname" | strings.Quote }}: {{ $hostname | strings.TrimLeft "::" | strings.Quote }},
+                    {{ "duid" | strings.Quote }}: {{ index $data "duid" | strings.Quote }},
+                    {{ "ip-addresses" | strings.Quote }}: [{{ index $data "ip" | strings.Quote }}]
+            }{{ if lt $c (add $l -1) }},{{ end }}
+            {{ $c = (add $c 1) }}
+            {{ end }}
+            ]
+        },
+        {{ end }}
+        {{ end }}
         ],
-
         "loggers": [
                 {
                     "name": "kea-dhcp6",
