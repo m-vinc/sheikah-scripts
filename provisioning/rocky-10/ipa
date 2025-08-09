@@ -15,12 +15,12 @@ function enroll(){
 
   if [[ ! -x "$(command -v ipa-client-install)" ]]; then
     echo "ipa-client-install is not available"
-    exit 1
+    return 1
   fi
 
   if enrolled ; then
     echo "already enrolled"
-    exit 0
+    return 0
   fi
 
   echo "start enrollement process"

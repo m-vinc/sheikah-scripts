@@ -23,7 +23,7 @@ function ssh_keys() {
 
     touch "$AUTHORIZED_KEYS_FILE"
     chmod 600 "$AUTHORIZED_KEYS_FILE"
-    chown $user: "$SSH_HOME"
+    chown $user: "$SSH_HOME" "$AUTHORIZED_KEYS_FILE"
 
     while IFS=$'\n' read -r key; do
             grep -m 1 "$key" "$AUTHORIZED_KEYS_FILE" >/dev/null 2>&1

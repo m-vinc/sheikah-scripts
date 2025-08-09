@@ -9,6 +9,11 @@ source ./ssh_keys
 source ./packages
 source ./ipa
 
+echo "install host packages"
 packages "$HOSTGROUP_MI" "$HOST_MI"
+
+echo "try to enroll the host"
 enroll "$HOSTGROUP_MI" "$HOST_MI"
+
+echo "setup up ssh keys"
 ssh_keys
