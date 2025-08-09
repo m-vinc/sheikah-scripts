@@ -1,8 +1,8 @@
 #!/bin/bash
 
-HOSTNAME="${HOSTNAME:-$(hostname -f)}"
+HOST_NAME="${HOST_NAME:-$(hostname -f)}"
 HOSTGROUP_MI="${HOSTGROUP_MI:-par3::hostgroups::rocky-10}"
-HOST_MI="${HOST_MI:-par3::hosts::$HOSTNAME}"
+HOST_MI="${HOST_MI:-par3::hosts::$HOST_NAME}"
 SSH_KEYRING_MI="${KEYRING_MI:-par3::keyring::ssh}"
 
 source ./ssh_keys
@@ -13,7 +13,7 @@ echo "install host packages"
 packages "$HOSTGROUP_MI" "$HOST_MI"
 
 echo "try to enroll the host"
-enroll "$HOSTGROUP_MI" "$HOST_MI"
+enroll "$HOST_NAME" "$HOSTGROUP_MI" "$HOST_MI"
 
 echo "setup up ssh keys"
 ssh_keys

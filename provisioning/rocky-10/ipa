@@ -10,8 +10,9 @@ function enrolled(){
 }
 
 function enroll(){
-  HOSTGROUP_MI="$1"
-  HOST_MI="$2"
+  HOST_NAME="$1"
+  HOSTGROUP_MI="$2"
+  HOST_MI="$3"
 
   if [[ ! -x "$(command -v ipa-client-install)" ]]; then
     echo "ipa-client-install is not available"
@@ -23,11 +24,26 @@ function enroll(){
     return 0
   fi
 
+  if [[ -z "$HOST_NAME" ]]; then
+    echo "HOST_NAME must be set"
+    return 1
+  fi
+
+  echo "setting hostname"
+  hostnamectl set-hostname "$HOST_NAME"
+
   echo "start enrollement process"
   NTP_POOL=$(sheikahctl get -r "$HOSTGROUP_MI:ntp_pool")
+  echo $?
   IPA_OTP=$(sheikahctl get -r "$HOST_MI:ipa_otp")
+  echo $?
 
+  if [[ -z "$NTP_POOL" || -z "$IPA_OTP" ]]; then
+    ipa-client-install
+    return $?
+  fi
 
-  ipa-client-install --ntp-pool "$NTP_POOL" --unattended --password "$IPA_OTP"
+  ipa-client-install --all-ip-addresses --ntp-pool "$NTP_POOL" --unattended --password "$IPA_OTP"
+  return $?
 }
 
