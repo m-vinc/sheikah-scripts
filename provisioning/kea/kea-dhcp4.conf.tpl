@@ -4,7 +4,9 @@
             "library": "/usr/lib64/kea/hooks/libdhcp_lease_cmds.so"
         }],
         "interfaces-config": {
-            "interfaces": [ {{ index (ds "dhcp") "interface" | strings.Quote }} ]
+            {{ $interfaces := ( strings.Split "," ((index (ds "dhcp") "interfaces") )) }}
+            {{ $l := ( len $interfaces ) }}
+            "interfaces": [ {{ range $i, $interface := $interfaces }} {{ $interface | strings.Quote }}{{ if lt $i (add $l -1) }},{{ end }}{{ end }}  ]
         },
         "control-socket": {
             "socket-type": "unix",
@@ -27,14 +29,38 @@
         "rebind-timer": 2000,
         "valid-lifetime": 4000,
 
-
+	"client-classes": [
+           {{ if and (index (ds "dhcp") "ipxe_http") (index (ds "dhcp") "next_server") }}
+           {
+              "name": "a-ipxe",
+              "test": "option[77].hex == 'iPXE'",
+	      "boot-file-name": {{ index (ds "dhcp") "ipxe_http" | strings.Quote }}
+           },
+	   {{ end }}
+           {{ if and (index (ds "dhcp") "ipxe_legacy") (index (ds "dhcp") "next_server") }}
+           {
+              "name": "b-efi",
+              "test": "option[93].hex == 0x0000",
+	      "next-server": {{ index (ds "dhcp") "next_server" | strings.Quote }},
+              "boot-file-name": {{ index (ds "dhcp") "ipxe_legacy" | strings.Quote }}
+           },
+	   {{ end }}
+           {{ if and (index (ds "dhcp") "ipxe_efi") (index (ds "dhcp") "next_server") }}
+           {
+              "name": "ipxe-efi",
+              "test": "option[93].hex == 0x0007",
+	      "next-server": {{ index (ds "dhcp") "next_server" | strings.Quote }},
+              "boot-file-name": {{ index (ds "dhcp") "ipxe_efi" | strings.Quote }}
+           },
+	   {{ end }}
+        ],
 
         "subnet4": [
         {{ range $k, $v := (index (ds "dhcp")) }}
         {{ if $k | strings.HasPrefix "::" }}
         {
                 "id": {{ index $v "id" }},
-		"interface": {{ (index (ds "dhcp") "interface") | strings.Quote }},
+		"interface": {{ (index $v "interface") | strings.Quote }},	
                 "option-data": [
                 {{ if index $v "router" }}
                 {
@@ -57,6 +83,7 @@
                     {{ range $k, $v := (index $v "::pools") }} { {{ "pool" | strings.Quote }}: {{ strings.Quote $v }} }{{ if lt $c (add $l -1) }},{{ end }} {{ $c = (add $c 1) }}{{ end }}
                 ],
                 {{ end }}
+		{{ if (index $v "::leases") }}
                 "reservations": [
                 {{ $c := 0 }}
                 {{ $l := ( len (index $v "::leases") ) }}
@@ -68,7 +95,8 @@
                 {{ $c = (add $c 1) }}
                 {{ end }}
                 ]
-        }
+		{{ end }}
+        },
         {{ end }}
         {{ end }}
         ],

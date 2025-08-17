@@ -21,6 +21,10 @@ mv -v kea-dhcp6.conf.tpl "$SHEIKAH_CONFIG/kea-dhcp6.conf.tpl"
 chown "$KEA_USER:" "$SHEIKAH_CONFIG/kea-dhcp6.conf.tpl"
 chmod 644 "$SHEIKAH_CONFIG/kea-dhcp6.conf.tpl"
 
+mv -v kea-dhcp4.conf.tpl "$SHEIKAH_CONFIG/kea-dhcp4.conf.tpl"
+chown "$KEA_USER:" "$SHEIKAH_CONFIG/kea-dhcp4.conf.tpl"
+chmod 644 "$SHEIKAH_CONFIG/kea-dhcp4.conf.tpl"
+
 mv -v kea-ctrl-agent.conf.tpl "$SHEIKAH_CONFIG/kea-ctrl-agent.conf.tpl"
 chown "$KEA_USER:" "$SHEIKAH_CONFIG/kea-ctrl-agent.conf.tpl"
 chmod 644 "$SHEIKAH_CONFIG/kea-ctrl-agent.conf.tpl"
@@ -35,10 +39,16 @@ sed -i "/^DHCP_MI=\"/c\DHCP_MI=\${DHCP_MI:-${DHCP_MI}"} "$SHEIKAH_CONFIG/configu
 chown "root:" "$SHEIKAH_CONFIG/configure"
 chmod 750 "$SHEIKAH_CONFIG/configure"
 
+mv -v configure_ctrl_agent configure4 configure6 "$SHEIKAH_CONFIG/"
+chown "root:" "$SHEIKAH_CONFIG/configure_ctrl_agent" "$SHEIKAH_CONFIG/configure4" "$SHEIKAH_CONFIG/configure6"
+chmod 750 "$SHEIKAH_CONFIG/configure4" "$SHEIKAH_CONFIG/configure6" "$SHEIKAH_CONFIG/configure_ctrl_agent"
+
 if [[ -x "$(command -v getenforce)" ]] && [[ `getenforce` = "Enforcing" ]]; then
         echo "restoring SELinux context"
         restorecon -Rv "$SHEIKAH_CONFIG"
 fi
+
+cd $SHEIKAH_CONFIG
 
 bash "$SHEIKAH_CONFIG/configure"
 

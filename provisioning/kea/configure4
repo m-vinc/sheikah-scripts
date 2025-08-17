@@ -29,7 +29,8 @@ fi
 RES=$(kea-dhcp4 -t $TMP)
 if [[ $? -ne 0 ]]; then
         echo "unable to validate generated from kea: $RES"
-        rm -f "$TMP"
+        # rm -f "$TMP"
+	echo "generated template is: $TMP, remove it after debugging"
         exit 1
 fi
 

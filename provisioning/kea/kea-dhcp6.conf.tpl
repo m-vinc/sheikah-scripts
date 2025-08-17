@@ -4,7 +4,9 @@
             "library": "/usr/lib64/kea/hooks/libdhcp_lease_cmds.so"
         }],
         "interfaces-config": {
-            "interfaces": [ {{ index (ds "dhcp") "interface" | strings.Quote }} ]
+            {{ $interfaces := ( strings.Split "," ((index (ds "dhcp") "interfaces") )) }}
+            {{ $l := ( len $interfaces ) }}
+            "interfaces": [ {{ range $i, $interface := $interfaces }} {{ $interface | strings.Quote }}{{ if lt $i (add $l -1) }},{{ end }}{{ end }}  ]
         },
         "control-socket": {
             "socket-type": "unix",
@@ -32,7 +34,7 @@
         {{ if $k | strings.HasPrefix "::" }}
         {
             "id": {{ (index $v "id") }},
-            "interface": {{ (index (ds "dhcp") "interface") | strings.Quote }},
+            "interface": {{ (index $v "interface") | strings.Quote }},
             "subnet": {{ strings.Quote (index $v "subnet") }},
             "option-data": [
                 {{ if (index $v "dns_servers") }}
@@ -49,6 +51,7 @@
                 {{ range $k, $v := (index $v  "::pools") }} { {{ "pool" | strings.Quote }}: {{ strings.Quote $v }} }{{ if lt $c (add $l -1) }},{{ end }} {{ $c = (add $c 1) }}{{ end }}
             ],
             {{ end }}
+	    {{ if (index $v "::leases") }}
             "reservations": [
             {{ $c := 0 }}
             {{ $l := ( len (index $v "::leases") ) }}
@@ -60,6 +63,7 @@
             {{ $c = (add $c 1) }}
             {{ end }}
             ]
+	    {{ end }} 
         },
         {{ end }}
         {{ end }}
